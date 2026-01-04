@@ -12,7 +12,7 @@ audio { margin-top:20px; width: 80%; }
 </head>
 <body>
 
-<h2>Bluetooth Mic Recorder + Live Listening</h2>
+<h2>Bluetooth Mic Recorder + Live Listening (Gain x6)</h2>
 <p>Use your earbuds as the mic and listen in real time</p>
 
 <button id="startBtn">Start Recording</button>
@@ -20,7 +20,7 @@ audio { margin-top:20px; width: 80%; }
 <audio id="player" controls></audio>
 
 <script>
-let recorder, audioChunks = [], stream, audioCtx, source, destination;
+let recorder, audioChunks = [], stream, audioCtx, source, gainNode, destination;
 let folderHandle; // Handle to user-selected folder
 
 const startBtn = document.getElementById("startBtn");
@@ -46,11 +46,17 @@ startBtn.onclick = async () => {
     // Get mic stream
     stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-    // ----- Live listening -----
+    // ----- Live listening with gain -----
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     source = audioCtx.createMediaStreamSource(stream);
+
+    // Create GainNode and set gain x6
+    gainNode = audioCtx.createGain();
+    gainNode.gain.value = 6;
+
     destination = audioCtx.destination;
-    source.connect(destination);
+    source.connect(gainNode);
+    gainNode.connect(destination);
 
     // ----- Recording -----
     recorder = new MediaRecorder(stream);
@@ -59,7 +65,7 @@ startBtn.onclick = async () => {
 
     startBtn.disabled = true;
     stopBtn.disabled = false;
-    console.log("Recording + live listening started");
+    console.log("Recording + live listening started with gain x6");
   } catch (err) {
     alert("Mic permission denied or unavailable: " + err);
   }
