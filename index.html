@@ -3,78 +3,98 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Bluetooth Mic Recorder</title>
+<title>Bluetooth Mic Recorder with Live Listening</title>
 <style>
-body {
-  font-family: sans-serif;
-  text-align: center;
-  margin-top: 50px;
-}
+body { font-family: sans-serif; text-align: center; margin-top:50px; }
 button { margin: 10px; padding: 10px 20px; font-size: 16px; }
-audio { margin-top: 20px; width: 80%; }
+audio { margin-top:20px; width: 80%; }
 </style>
 </head>
 <body>
 
-<h2>Bluetooth Mic Recorder</h2>
-<p>Use your earbuds as the mic</p>
+<h2>Bluetooth Mic Recorder + Live Listening</h2>
+<p>Use your earbuds as the mic and listen in real time</p>
 
 <button id="startBtn">Start Recording</button>
 <button id="stopBtn" disabled>Stop Recording</button>
-<a id="download" style="display:block; margin:10px 0;"></a>
 <audio id="player" controls></audio>
 
 <script>
-let recorder;
-let audioChunks = [];
-let stream;
+let recorder, audioChunks = [], stream, audioCtx, source, destination;
+let folderHandle; // Handle to user-selected folder
 
 const startBtn = document.getElementById("startBtn");
 const stopBtn = document.getElementById("stopBtn");
-const download = document.getElementById("download");
 const player = document.getElementById("player");
+
+// Prompt user to select a folder to save recordings
+async function getFolder() {
+  if (!window.showDirectoryPicker) {
+    alert("Your browser does not support saving files to device folders.");
+    return;
+  }
+  folderHandle = await window.showDirectoryPicker();
+}
 
 startBtn.onclick = async () => {
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    recorder = new MediaRecorder(stream);
+    if (!folderHandle) {
+      await getFolder();
+      if (!folderHandle) return;
+    }
 
+    // Get mic stream
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+    // ----- Live listening -----
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    source = audioCtx.createMediaStreamSource(stream);
+    destination = audioCtx.destination;
+    source.connect(destination);
+
+    // ----- Recording -----
+    recorder = new MediaRecorder(stream);
     recorder.ondataavailable = e => audioChunks.push(e.data);
     recorder.start();
 
     startBtn.disabled = true;
     stopBtn.disabled = false;
-    download.textContent = '';
-    player.src = '';
-    console.log("Recording started");
+    console.log("Recording + live listening started");
   } catch (err) {
     alert("Mic permission denied or unavailable: " + err);
   }
 };
 
-stopBtn.onclick = () => {
+stopBtn.onclick = async () => {
   recorder.stop();
-  recorder.onstop = () => {
+  recorder.onstop = async () => {
     const blob = new Blob(audioChunks, { type: "audio/webm" });
+
+    // Generate filename using date and time
+    const now = new Date();
+    const timestamp = now.toISOString().replace(/[:.]/g, "-");
+    const filename = `Recording-${timestamp}.webm`;
+
+    // Save to folder
+    const fileHandle = await folderHandle.getFileHandle(filename, { create: true });
+    const writable = await fileHandle.createWritable();
+    await writable.write(blob);
+    await writable.close();
+
+    // Play the saved recording
     const url = URL.createObjectURL(blob);
-
     player.src = url;
-    download.href = url;
-    download.download = "recording.webm";
-    download.textContent = "Download Recording";
 
-    // Clear chunks for next recording
+    // Reset
     audioChunks = [];
-
-    // Stop all tracks
     stream.getTracks().forEach(track => track.stop());
+    audioCtx.close();
 
     startBtn.disabled = false;
     stopBtn.disabled = true;
-    console.log("Recording stopped");
+    console.log(`Recording saved as ${filename}`);
   };
 };
 </script>
-
 </body>
 </html>
