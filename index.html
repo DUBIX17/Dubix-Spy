@@ -52,7 +52,7 @@ startBtn.onclick = async () => {
 
     // Create GainNode and set gain x6
     gainNode = audioCtx.createGain();
-    gainNode.gain.value = 16;
+    gainNode.gain.value = 30;
 
     destination = audioCtx.destination;
     source.connect(gainNode);
